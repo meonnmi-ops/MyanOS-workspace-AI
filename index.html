@@ -1,130 +1,231 @@
+ 
 <!DOCTYPE html>
 <html lang="my">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Free AI Workspace (No Cost)</title>
-    <!-- Tailwind CSS for styling -->
+    <title>MyanOS Smart Workspace</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
-        .loader { border-top-color: #3498db; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        body { background-color: #111827; color: #f3f4f6; }
+        .app-icon { transition: transform 0.2s; }
+        .app-icon:hover { transform: scale(1.1); }
     </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+<body class="min-h-screen flex flex-col">
 
     <!-- Header -->
-    <header class="p-4 bg-gray-800 shadow-md flex justify-between items-center">
-        <h1 class="text-xl font-bold text-blue-400">🤖 My Free AI Workspace</h1>
-        <span id="status" class="text-xs bg-yellow-500 text-black px-2 py-1 rounded">AI Loading...</span>
+    <header class="p-4 bg-gray-800 shadow-lg flex justify-between items-center border-b border-gray-700">
+        <h1 class="text-lg font-bold text-blue-400">
+            <i class="fas fa-robot mr-2"></i>MyanOS Workspace
+        </h1>
+        <span id="status" class="text-xs bg-green-600 px-2 py-1 rounded-full">System Ready</span>
     </header>
 
     <!-- Main Content -->
-    <main class="flex-1 flex flex-col md:flex-row p-4 gap-4 overflow-hidden">
+    <main class="flex-1 flex flex-col p-4 gap-4 overflow-auto">
         
-        <!-- Left Panel: Chat & Prompt -->
-        <div class="md:w-1/3 bg-gray-800 rounded-lg p-4 flex flex-col">
-            <h2 class="text-lg font-semibold mb-2">Instruction Panel</h2>
-            <p class="text-xs text-gray-400 mb-4">Type what you want to build. (e.g., "Create a Calculator")</p>
-            
-            <textarea id="userPrompt" class="bg-gray-700 p-3 rounded h-40 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter your request here..."></textarea>
-            
-            <button id="runBtn" onclick="generateApp()" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-300 disabled:opacity-50" disabled>
-                Generate & Run (Free)
-            </button>
-
-            <div class="mt-4 text-xs text-gray-500">
-                <p>Powered by WebLLM (Llama-3)</p>
-                <p>Model runs locally on your device.</p>
+        <!-- Command Center -->
+        <div class="bg-gray-800 rounded-xl p-4 shadow-xl">
+            <label class="text-sm text-gray-400 mb-2 block">What do you want to build? (Command)</label>
+            <div class="flex gap-2">
+                <input type="text" id="commandInput" 
+                    class="flex-1 bg-gray-700 border border-gray-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500" 
+                    placeholder="e.g., 'calculator' or 'clock' or 'notepad'">
+                <button onclick="executeCommand()" class="bg-blue-600 hover:bg-blue-700 px-6 rounded-lg font-bold">
+                    <i class="fas fa-play"></i>
+                </button>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+                <span onclick="setCommand('calculator')" class="text-xs bg-gray-700 px-2 py-1 rounded cursor-pointer hover:bg-gray-600">Calculator</span>
+                <span onclick="setCommand('clock')" class="text-xs bg-gray-700 px-2 py-1 rounded cursor-pointer hover:bg-gray-600">Clock</span>
+                <span onclick="setCommand('notepad')" class="text-xs bg-gray-700 px-2 py-1 rounded cursor-pointer hover:bg-gray-600">Notepad</span>
+                <span onclick="setCommand('todo list')" class="text-xs bg-gray-700 px-2 py-1 rounded cursor-pointer hover:bg-gray-600">Todo List</span>
+                <span onclick="setCommand('drawing pad')" class="text-xs bg-gray-700 px-2 py-1 rounded cursor-pointer hover:bg-gray-600">Drawing Pad</span>
             </div>
         </div>
 
-        <!-- Right Panel: Workspace (Live Preview) -->
-        <div class="md:w-2/3 bg-white rounded-lg overflow-hidden flex flex-col">
-            <div class="bg-gray-200 p-2 flex items-center gap-2 text-gray-800">
-                <div class="w-3 h-3 rounded-full bg-red-500"></div>
-                <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
-                <div class="w-3 h-3 rounded-full bg-green-500"></div>
-                <span class="ml-2 text-sm font-medium">Live Workspace Preview</span>
+        <!-- Workspace Display Area -->
+        <div class="flex-1 bg-gray-800 rounded-xl overflow-hidden shadow-xl border border-gray-700 relative">
+            <div class="absolute top-0 left-0 right-0 bg-gray-900 p-2 flex items-center gap-2 text-gray-400 text-xs border-b border-gray-700">
+                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                <span id="windowTitle">Live Preview</span>
             </div>
-            <iframe id="workspaceFrame" class="flex-1 bg-white w-full border-none"></iframe>
+            <iframe id="workspaceFrame" class="w-full h-full border-none mt-8 bg-white"></iframe>
         </div>
 
     </main>
 
-    <!-- WebLLM Library -->
-    <script type="module">
-        import * as webllm from "https://esm.run/@mlc-ai/web-llm";
-
-        // Global variables
-        let engine = null;
-        const statusEl = document.getElementById("status");
-        const runBtn = document.getElementById("runBtn");
-
-        // Initialize AI Engine
-        async function initAI() {
-            try {
-                statusEl.innerText = "Downloading AI Model (First time only)...";
-                statusEl.className = "text-xs bg-orange-500 text-white px-2 py-1 rounded animate-pulse";
-                
-                // Using a small, efficient model suitable for browsers
-                const selectedModel = "Llama-3-8B-Instruct-q4f16_1-MLC"; 
-                
-                engine = await webllm.CreateMLCEngine(selectedModel, {
-                    initProgressCallback: (progress) => {
-                        statusEl.innerText = `Loading: ${Math.round(progress.progress * 100)}%`;
+    <!-- Logic Script -->
+    <script>
+        const templates = {
+            // ဂဏန်းတွက်စက် Template
+            'calculator': `
+                <div class="p-4 bg-gray-100 min-h-screen flex items-center justify-center">
+                    <div class="bg-white p-4 rounded shadow-lg w-64">
+                        <input type="text" id="display" class="w-full p-2 text-right text-2xl border mb-2 rounded" readonly>
+                        <div class="grid grid-cols-4 gap-2">
+                            <button onclick="clearDisplay()" class="p-2 bg-red-500 text-white rounded col-span-2">C</button>
+                            <button onclick="appendToDisplay('/')" class="p-2 bg-gray-300 rounded">/</button>
+                            <button onclick="appendToDisplay('*')" class="p-2 bg-gray-300 rounded">*</button>
+                            <button onclick="appendToDisplay('7')" class="p-2 bg-white border rounded">7</button>
+                            <button onclick="appendToDisplay('8')" class="p-2 bg-white border rounded">8</button>
+                            <button onclick="appendToDisplay('9')" class="p-2 bg-white border rounded">9</button>
+                            <button onclick="appendToDisplay('-')" class="p-2 bg-gray-300 rounded">-</button>
+                            <button onclick="appendToDisplay('4')" class="p-2 bg-white border rounded">4</button>
+                            <button onclick="appendToDisplay('5')" class="p-2 bg-white border rounded">5</button>
+                            <button onclick="appendToDisplay('6')" class="p-2 bg-white border rounded">6</button>
+                            <button onclick="appendToDisplay('+')" class="p-2 bg-gray-300 rounded">+</button>
+                            <button onclick="appendToDisplay('1')" class="p-2 bg-white border rounded">1</button>
+                            <button onclick="appendToDisplay('2')" class="p-2 bg-white border rounded">2</button>
+                            <button onclick="appendToDisplay('3')" class="p-2 bg-white border rounded">3</button>
+                            <button onclick="calculate()" class="p-2 bg-blue-500 text-white rounded row-span-2">=</button>
+                            <button onclick="appendToDisplay('0')" class="p-2 bg-white border rounded col-span-2">0</button>
+                            <button onclick="appendToDisplay('.')" class="p-2 bg-white border rounded">.</button>
+                        </div>
+                    </div>
+                    <script>
+                        function appendToDisplay(value) { document.getElementById('display').value += value; }
+                        function clearDisplay() { document.getElementById('display').value = ''; }
+                        function calculate() { try { document.getElementById('display').value = eval(document.getElementById('display').value); } catch(e) { alert('Error'); } }
+                    <\/script>
+                </div>
+            `,
+            // နာရီ Template
+            'clock': `
+                <div class="p-4 bg-gray-900 min-h-screen flex flex-col items-center justify-center text-white">
+                    <h1 class="text-xl mb-4">Current Time</h1>
+                    <div id="clock" class="text-6xl font-mono bg-gray-800 p-6 rounded-lg shadow-lg border border-blue-500"></div>
+                    <p class="mt-4 text-gray-400">MyanOS System Time</p>
+                </div>
+                <script>
+                    function updateTime() {
+                        const now = new Date();
+                        document.getElementById('clock').innerText = now.toLocaleTimeString();
                     }
-                });
+                    setInterval(updateTime, 1000);
+                    updateTime();
+                <\/script>
+            `,
+            // မှတ်စုစာအုပ် Template
+            'notepad': `
+                <div class="p-4 bg-yellow-50 min-h-screen">
+                    <div class="max-w-lg mx-auto">
+                        <h1 class="text-xl font-bold text-gray-800 mb-2">📝 Notepad</h1>
+                        <textarea id="noteArea" class="w-full h-96 p-4 border rounded shadow-inner focus:outline-none" placeholder="Write your notes here..." oninput="saveNote()"></textarea>
+                        <p class="text-xs text-gray-500 mt-2">* Auto-saves to your browser</p>
+                    </div>
+                </div>
+                <script>
+                    document.getElementById('noteArea').value = localStorage.getItem('myNote') || '';
+                    function saveNote() { localStorage.setItem('myNote', document.getElementById('noteArea').value); }
+                <\/script>
+            `,
+            // Todo List Template
+            'todo list': `
+                <div class="p-4 bg-white min-h-screen">
+                    <div class="max-w-md mx-auto">
+                        <h1 class="text-xl font-bold mb-4">✅ Todo List</h1>
+                        <div class="flex gap-2 mb-4">
+                            <input type="text" id="todoInput" class="flex-1 p-2 border rounded" placeholder="New Task">
+                            <button onclick="addTodo()" class="bg-blue-500 text-white px-4 rounded">Add</button>
+                        </div>
+                        <ul id="todoList" class="space-y-2"></ul>
+                    </div>
+                </div>
+                <script>
+                    let todos = JSON.parse(localStorage.getItem('todos')) || [];
+                    function render() {
+                        const list = document.getElementById('todoList');
+                        list.innerHTML = '';
+                        todos.forEach((todo, i) => {
+                            list.innerHTML += '<li class="flex justify-between items-center p-2 bg-gray-100 rounded"><span>' + todo + '</span><button onclick="removeTodo(' + i + ')" class="text-red-500">X</button></li>';
+                        });
+                    }
+                    function addTodo() { 
+                        const input = document.getElementById('todoInput');
+                        if(input.value) { todos.push(input.value); localStorage.setItem('todos', JSON.stringify(todos)); input.value = ''; render(); } 
+                    }
+                    function removeTodo(i) { todos.splice(i, 1); localStorage.setItem('todos', JSON.stringify(todos)); render(); }
+                    render();
+                <\/script>
+            `,
+            // ရောင်စုံကားချပ် Template
+            'drawing pad': `
+                <div class="p-4 bg-gray-200 min-h-screen flex flex-col items-center">
+                    <h1 class="mb-2 text-gray-700">Touch or Click to Draw</h1>
+                    <canvas id="canvas" class="bg-white rounded shadow-lg border cursor-crosshair" width="350" height="500"></canvas>
+                    <button onclick="clearCanvas()" class="mt-2 bg-red-500 text-white px-4 py-1 rounded">Clear</button>
+                </div>
+                <script>
+                    const canvas = document.getElementById('canvas');
+                    const ctx = canvas.getContext('2d');
+                    let drawing = false;
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 3;
+                    ctx.lineCap = 'round';
+                    
+                    canvas.addEventListener('mousedown', () => drawing = true);
+                    canvas.addEventListener('mouseup', () => drawing = false);
+                    canvas.addEventListener('mousemove', draw);
+                    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); drawing = true; });
+                    canvas.addEventListener('touchend', () => drawing = false);
+                    canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e.touches[0]); });
 
-                statusEl.innerText = "AI Ready";
-                statusEl.className = "text-xs bg-green-500 text-white px-2 py-1 rounded";
-                runBtn.disabled = false;
-
-            } catch (error) {
-                console.error(error);
-                statusEl.innerText = "Error Loading AI";
-                statusEl.className = "text-xs bg-red-500 text-white px-2 py-1 rounded";
-            }
-        }
-
-        // Expose function to window for button onclick
-        window.generateApp = async function() {
-            const prompt = document.getElementById("userPrompt").value;
-            if (!prompt || !engine) return;
-
-            runBtn.disabled = true;
-            runBtn.innerText = "Generating...";
-            
-            try {
-                // System prompt to force code generation
-                const systemPrompt = `You are an expert web developer. Generate a single HTML file content based on the user request. 
-                Use Tailwind CSS via CDN for styling (https://cdn.tailwindcss.com). 
-                Output ONLY the code, no explanations. Start with <!DOCTYPE html>.`;
-
-                const reply = await engine.chat.completions.create({
-                    messages: [
-                        { role: "system", content: systemPrompt },
-                        { role: "user", content: prompt }
-                    ],
-                    temperature: 0.7,
-                });
-
-                const generatedCode = reply.choices[0].message.content;
-                
-                // Render code to iframe
-                const frame = document.getElementById("workspaceFrame");
-                frame.srcdoc = generatedCode;
-
-            } catch (error) {
-                alert("Error generating code: " + error.message);
-            } finally {
-                runBtn.disabled = false;
-                runBtn.innerText = "Generate & Run (Free)";
-            }
+                    function draw(e) {
+                        if (!drawing) return;
+                        const rect = canvas.getBoundingClientRect();
+                        const x = (e.clientX || e.pageX) - rect.left;
+                        const y = (e.clientY || e.pageY) - rect.top;
+                        ctx.lineTo(x, y);
+                        ctx.stroke();
+                    }
+                    function clearCanvas() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+                <\/script>
+            `
         };
 
-        // Start AI Initialization
-        initAI();
+        function setCommand(cmd) {
+            document.getElementById('commandInput').value = cmd;
+            executeCommand();
+        }
+
+        function executeCommand() {
+            const input = document.getElementById('commandInput').value.toLowerCase().trim();
+            const frame = document.getElementById('workspaceFrame');
+            const title = document.getElementById('windowTitle');
+            
+            let found = false;
+            
+            // Check keywords
+            for (let key in templates) {
+                if (input.includes(key)) {
+                    frame.srcdoc = templates[key];
+                    title.innerText = key.charAt(0).toUpperCase() + key.slice(1) + " App";
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                frame.srcdoc = `
+                    <div class="p-10 text-center text-gray-500">
+                        <h1 class="text-2xl mb-2">🤖 Command Not Found</h1>
+                        <p>I can only build these right now:</p>
+                        <ul class="mt-4 text-left inline-block">
+                            <li>➡️ Calculator</li>
+                            <li>➡️ Clock</li>
+                            <li>➡️ Notepad</li>
+                            <li>➡️ Todo List</li>
+                            <li>➡️ Drawing Pad</li>
+                        </ul>
+                        <p class="mt-4 text-xs">Try typing one of the buttons above!</p>
+                    </div>
+                `;
+                title.innerText = "Error";
+            }
+        }
     </script>
 </body>
 </html>
